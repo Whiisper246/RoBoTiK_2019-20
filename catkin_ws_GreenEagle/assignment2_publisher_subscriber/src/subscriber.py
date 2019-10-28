@@ -3,7 +3,7 @@ import rospy
 from autominy_msgs.msg import Speed 
 
 def callback(data):
-        rospy.loginfo("Current Speed",data)
+        rospy.loginfo("data)
 
 def subscriber():
 
