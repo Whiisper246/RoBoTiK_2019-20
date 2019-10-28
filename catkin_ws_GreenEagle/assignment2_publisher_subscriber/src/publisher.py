@@ -3,7 +3,7 @@ import rospy
 from autominy_msgs.msg import SpeedCommand
 from autominy_msgs.msg import NormalizedSteeringCommand
 
-rospy.init_node('rpildar_driver_node', anonymous=True)
+rospy.init_node('publisher', anonymous=True)
 
 pub = rospy.Publisher('/actuators/steering_normalized',NormalizedSteeringCommand, queue_size=10)
 pub2 = rospy.Publisher('/actuators/speed',SpeedCommand, queue_size=10)
