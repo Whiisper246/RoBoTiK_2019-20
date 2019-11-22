@@ -1,0 +1,69 @@
+import rospy
+import time
+from nav_msgs.msg import Odometry
+from autominy_msgs.msg import SpeedCommand, NormalizedSteeringCommand, SteeringFeedback, Tick
+from std_msgs.msg import Float32
+
+def gpsCall(odometry_data):
+    global positionX, positionY
+
+    positionX = odometry_data.pose.pose.position.x
+    positionY = odometry_data.pose.pose.position.y
+    # rospy.loginfo("Position x:"+positionX+" , Position y:"+positionY)
+
+
+def tickCall(tick):
+    global accTick
+    accTick = tick
+    rospy.loginfo(accTick.value)
+
+
+
+pub_speed = rospy.Publisher("/actuators/speed", SpeedCommand, queue_size=80)
+pub_steering = rospy.Publisher("/actuators/steering_normalized", NormalizedSteeringCommand, queue_size=80)
+pub_steeringAngle = rospy.Publisher("/kreise", Float32, queue_size=80)
+pub_tick = rospy.Publisher("/sensors/arduino/ticks", Tick, queue_size=80)
+sub_GPS = rospy.Subscriber("/communication/gps/7", Odometry, gpsCall, queue_size=10)
+    
+rospy.init_node("kreise")
+rospy.Subscriber("/sensors/arduino/ticks",Tick,tickCall)
+
+accTick = 0.0
+positionX = 0.0
+positionY = 0.0
+
+def main():
+    # tickCall(Tick)
+    # gpsCall(Odometry)
+    steering_cmd = NormalizedSteeringCommand()
+    steering_cmd.value = 0.0 #left 1.0 , right -1.0 
+    pub_steering.publish(steering_cmd)
+    speed = SpeedCommand()
+    speed.value = 0.2 #moeglichst langsam
+    pub_speed.publish(speed)
+    time.sleep(4)
+    #steering_cmd.value = 1.0 #left 
+    #pub_steering.publish(steering_cmd)
+    #speed = SpeedCommand()
+    #speed.value = 0.1 #moeglichst langsam
+    #pub_speed.publish(speed)
+    #time.sleep(4)
+    #steering_cmd.value = 1.0 #right -1.0 
+    #pub_steering.publish(steering_cmd)
+    #speed = SpeedCommand()
+    #time.sleep(4)
+    #speed.value = 0.1 
+    #pub_speed.publish(speed)
+    #time.sleep(4)
+    speed.value = 0.0
+    pub_speed.publish(speed)
+    time.sleep(4)
+
+
+
+
+if __name__ == '__main__':
+    main()
+
+
+rospy.spin()
