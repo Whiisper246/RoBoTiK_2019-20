@@ -1,0 +1,138 @@
+#!/usr/bin/python
+import rospy 
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+import math
+from PIL import Image
+from sensor_msgs.msg import Image, CompressedImage
+
+
+
+def imageCall(sensor_data):
+	f = open("autoview.jpg","w+")
+	f.write(sensor_data.data)
+	f.close()
+	img = cv2.imread('autoview.jpg',0)
+	cv2.imwrite("autoview.jpg",img)
+	# reading in the image, creating threshold and reading out height and width.
+	thresh, img_binary = cv2.threshold(img, 254, 255, cv2.THRESH_BINARY)
+	height, width = img_binary.shape
+	# setting color and filling rectangle
+	color = (0,0,0)
+	thickness = -1
+	#Balcking out the horizont starting from leftupper Corner A to rightlower corner B
+	horizont_A = (0,0)
+	horizont_B =(width,height/3)
+	img_binary = cv2.rectangle(img_binary,horizont_A,horizont_B,color,thickness)
+	#Balcking out the car leftovers starting from leftupper Corner A to rightlower corner B
+	car_A = (width/2 - width/6, height/2)
+	car_B =(width/2 + width/4,height)
+	img_binary = cv2.rectangle(img_binary,car_A,car_B,(0,0,0),thickness)
+	# save tresh to find white pixel better
+	cv2.imwrite("img_binary.jpg",img_binary)
+	rospy.signal_shutdown("done")
+
+def findWhitePixel():
+	img_binary = cv2.imread("img_binary.jpg", cv2.THRESH_BINARY) 
+	whitePixelIndex = np.where(img_binary==255)
+	whitePixel = []
+	for i in range(0,len(whitePixelIndex[0])):
+		p_1 = whitePixelIndex[0][i]
+		p_2 = whitePixelIndex[1][i]
+		whitePixel.append((p_1,p_2))
+		img_binary[(p_1,p_2)] = 255
+		#img_binary_COLOR[(p_1,p_2)] = [255,255,255]
+	cv2.imwrite("img_binary.jpg",img_binary)
+	cv2.imwrite("img_binary_COLOR.jpg",img_binary)
+	return whitePixel
+
+def ransac_simple(pixel):
+	global s ,e ,N, p 
+	# points in threshold 
+	final_point_1 = (0,0)
+	final_point_2 = (0,0)
+	max_amount_of_inliers = 0
+	final_inliers_threshold = []
+	s = 2
+	e = 0.20
+	p = 0.95	
+	N = int(round(np.log(1-p))/(np.log(1-(1-e)**s)))
+	sample_count = 0
+	whitePixel = pixel
+	while N>sample_count:
+		# choose 2 random pixel of all white pixel
+		x = random.choice(whitePixel)
+		y = random.choice(whitePixel)
+		while (x == y):
+			y = random.choice(whitePixel)
+
+		# Berechne Gerade in Parameterform
+		# g:y_vec = x_vec+r*u_vec 
+		x_vec = np.asarray(x)
+		y_vec = np.asarray(y)
+		u_vec = y_vec-x_vec
+		
+		inliers_threshold = []
+		
+		for i in whitePixel:
+			# calculate the distance of the random white pixel p and the line d= |(p_vec - x_vec)xu_vec|/|u_vec|
+			# if it is in the range of inliers_epsilon add to threshold
+			d = np.linalg.norm(np.cross((np.asarray(i)-x_vec),u_vec))/np.linalg.norm(u_vec)	
+			if(d <= e):			
+				inliers_threshold.append(i)	
+		amount_inliers = float(len(inliers_threshold))
+		amount_pixel = float(len(whitePixel))
+
+		e = 1-(float(amount_inliers/amount_pixel))
+		N = (np.log(1-p))/(np.log(1-(1-e)**s))
+		# as we chose 2 random pixels each epoche we now compare them to the given one and see if it involes more pixels as threshold
+		if(len(inliers_threshold)>max_amount_of_inliers):
+			max_amount_of_inliers = len(inliers_threshold)
+			final_point_1 = x
+			final_point_2 = y
+			final_inliers_threshold = inliers_threshold
+		sample_count +=1
+
+	
+	#print(inliers_threshold)
+	for i in inliers_threshold:
+		img_binary_COLOR[i] = [0,0,255]
+
+	cv2.line(img_binary_COLOR,(final_point_1[1],final_point_1[0]),(final_point_2[1],final_point_2[0]),(255,0,0),2)
+	img_binary_COLOR[final_point_1] = [0,0,255]
+	img_binary_COLOR[final_point_2] = [0,0,255]
+	#print(max_amount_of_inliers, final_point_1,final_point_2)
+	cv2.imwrite("img_binary_COLOR.jpg",img_binary_COLOR)
+	print("Counter: ",sample_count,"Point_1:",final_point_1,"  Point_2:",final_point_2," N: ",N," e: ",e)
+	return(final_inliers_threshold)
+	
+def ransac_iter(pixel):
+	global img_binary_COLOR
+	img_binary_COLOR = cv2.imread("img_binary_COLOR.jpg", cv2.IMREAD_COLOR)
+	all_whitePixel = pixel
+	counter = 0
+	while 2>=counter: 
+		erg = ransac_simple(all_whitePixel)
+		for i in erg:
+	  		all_whitePixel.remove(i)
+		counter +=1
+
+#-------------------------------------------------------------
+rospy.init_node("print_info")
+pub_image = rospy.Publisher("/sensor_msgs/Image", Image, queue_size=10)
+sub_compressed_image  = rospy.Subscriber("/sensors/camera/infra1/image_rect_raw/compressed", CompressedImage, imageCall, queue_size =10)
+whitePixel = findWhitePixel()
+ransac_iter(whitePixel)
+rospy.spin()
+
+
+
+
+
+
+
+
+
+
