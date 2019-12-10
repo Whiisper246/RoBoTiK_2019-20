@@ -1,0 +1,103 @@
+import rospy
+import time
+import math
+import sys
+import tf
+from nav_msgs.msg import Odometry
+from autominy_msgs.msg import SpeedCommand, SteeringFeedback
+from geometry_msgs.msg import Point, Pose, Quaternion, Vector3, Twist
+
+accSpeed = 0.0		#Speed
+accSteering = 0.0	# SteeringAngle
+l = 0.27		# l = length of car
+init_x = 0.0
+init_y = 0.0
+init_theta = 0.0
+currentTime = 0.0
+
+
+
+def speedCall(speed):
+    global accSpeed
+    accSpeed = speed.value 
+    #rospy.loginfo("Speed: "+str(accSpeed) )
+  
+
+def steeringCall(steering):
+    global accSteering
+    accSteering = steering.value 
+    #rospy.loginfo("SteeringAngle: "+str(accSteering) )
+
+def initialCall(odometry):
+    global init_x, init_y, init_theta
+    init_x = odometry.pose.pose.position.x
+    init_y = odometry.pose.pose.position.y
+    init_theta = math.asin(odometry.pose.pose.orientation.z)*2
+    #rospy.loginfo("\nInitials \nx: "+str(init_x)+"\ny: "+str(init_y)+ " \nTheta: "+str(init_theta))
+
+def pub_odometry(x,x_Punkt,y,y_Punkt,theta,theta_Punkt,currentTime):
+    quat = tf.transformations.quaternion_from_euler(0,0,theta)
+    odom_broadcaster.sendTransform(
+    (x,y,0.),
+    quat,
+    currentTime,
+    "base_link",
+    "odom"
+    )
+    odom = Odometry()
+    odom.header.stamp = currentTime
+    odom.header.frame_id = "map"
+    odom.child_frame_id =  "base_link"
+    odom.pose.pose= Pose(Point(x,y,0.),Quaternion(*quat))
+    odom.twist.twist = Twist(Vector3(x_Punkt,y_Punkt,0),Vector3(0,0,theta_Punkt))
+    pub_Odom.publish(odom)
+
+
+def calcOdometry():
+    global accSteering, accSpeed, currentTime, init_x, init_y, init_theta, l
+    x = init_x
+    y = init_y
+    theta = init_theta    
+    r = rospy.Rate(100)
+    while not rospy.is_shutdown():
+        lastTime = currentTime
+        currentTime = rospy.Time.now().nsecs
+        dt = (currentTime-lastTime)
+	x_Punkt = (accSpeed * math.cos(theta))
+	y_Punkt = (accSpeed * math.sin(theta))
+        theta_Punkt = (accSpeed/l)* math.tan(accSteering)
+	accX = x
+	accY = y
+	accTheta = theta
+	x = accX +(dt*x_Punkt)
+	y = accY +(dt*y_Punkt)
+	theta = accTheta +(dt*theta_Punkt)
+        
+        pub_odometry(x,x_Punkt,y,y_Punkt,theta,theta_Punkt,currentTime)
+        
+	rospy.loginfo("\n-------------------------------------------\nupdated Values:\nNew X:"+str(x)+ "\nNew Y: "+str(y)+"\nNew theta: "+str(theta)+"\nDifference in nsecs: "+str(dt)+"\n------------------------------------------------------------")
+	r.sleep()  # Wait
+        
+
+
+rospy.init_node("odometry_pub", anonymous=True)
+
+
+sub_Speed = rospy.Subscriber("/sensors/speed", SpeedCommand, speedCall,queue_size=10)
+sub_SteeringAngle = rospy.Subscriber("/sensors/arduino/steering_angle", SteeringFeedback, steeringCall,queue_size=10)
+sub_Odometry = rospy.Subscriber("/sensors/localization/filtered_map", Odometry, initialCall,queue_size=10)
+
+pub_Odom = rospy.Publisher("odomy", Odometry,queue_size=50)
+odom_broadcaster = tf.TransformBroadcaster()
+#tf.TransformBroadcaster()
+
+
+def main():
+    print("Started")
+    calcOdometry()
+
+if __name__ == '__main__':
+    main()
+
+
+rospy.spin()
