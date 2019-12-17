@@ -1,1 +1,84 @@
+import rospy
+import time
+import sys
+import math
+import tf
+from nav_msgs.msg import Odometry
+from autominy_msgs.msg import SteeringFeedback, SpeedCommand, SteeringCommand
+#from geometry_msgs.msg import Quaternion
 
+
+
+accSteering = 0.0
+accSpeed = 0.0
+accTheta = 0.0
+accError = 0.0
+lastError = 0.0
+
+
+
+def steeringCall(steering):
+    global accSteering
+    accSteering = steering.value
+    #rospy.loginfo("SteeringAngle: "+ str(accSteering))
+
+def speedCall(speed):
+    global accSpeed
+    accSpeed = speed.value
+    #rospy.loginfo("Speed: "+ str(accSpeed))
+   
+
+def pdControl(odometry):
+    global accTheta, accError, lastError, accSteering
+    accTheta = math.asin(odometry.pose.pose.orientation.z)*2
+   
+    yawnAngle = 0
+    kp = 2
+    kd = 2  
+    nachkommastellen = 2
+
+    accError = abs(yawnAngle-accTheta) #error_p
+    accSteering = accSteering + (kp*accError)+  (kd*abs(lastError-accError)) # error_d 
+ 
+    rospy.loginfo("\naccTheta (ceeling):\n"+str(accTheta)+"\nSteeringUpdate: "+ str(accSteering)+ "\nError: "+ str(round(accError,nachkommastellen)) )
+     
+    
+    if(round(accError,nachkommastellen) > 0): #Errordistance
+  
+       if(accTheta < yawnAngle):
+
+          steering_cmd = NormalizedSteeringCommand()
+    	  steering_cmd.value  = accSteering
+          pub_steering.publish(steering_cmd)
+          time.sleep(2)
+        
+
+       elif(accTheta > yawnAngle):
+          steering_cmd = NormalizedSteeringCommand()
+    	  steering_cmd.value  = accSteering
+          pub_steering.publish(steering_cmd)
+          time.sleep(2)
+   
+          
+
+    speed_cmd = SpeedCommand()
+    speed_cmd.value = 0.1
+    pub_speed.publish(speed_cmd)
+    lastError = accError
+
+
+    rospy.loginfo("\nCeeling Theta:\n"+str(accTheta))
+  
+rospy.init_node("ass_9")
+sub_SteeringAngle = rospy.Subscriber("/sensors/arduino/steering_angle", SteeringFeedback, steeringCall, queue_size=10)
+#sub_Speed = rospy.Subscriber("/sensors/speed", SpeedCommand, speedCall, queue_size=10)
+sub_Odometry = rospy.Subscriber("/sensors/localization/filtered_map", Odometry, pdControl, queue_size=100)
+
+pub_speed = rospy.Publisher("/actuators/speed", SpeedCommand, queue_size=80)
+pub_Odom = rospy.Publisher("odomy", Odometry, queue_size = 10)
+pub_steering = rospy.Publisher("/actuators/steering", NormalizedSteeringCommand, queue_size=80)
+
+
+
+
+rospy.spin()
