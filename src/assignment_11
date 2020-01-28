@@ -2,6 +2,7 @@ import rospy
 import math
 import numpy as np
 import time
+from std_msgs.msg import Int32
 from nav_msgs.msg import Odometry
 from autominy_msgs.msg import NormalizedSteeringCommand, SteeringCommand
 from map import Lane  
@@ -9,61 +10,64 @@ from steering_pid import SteeringPID
 from autominy_msgs.msg import SpeedCommand
 
 
+accLane = 0
+Konstant_steering = 50
+Konstant_speed = 0.2
 
-
-Konstante = 50
 lane_1 = np.load("lane1.npy")
 lane_2 = np.load("lane2.npy")
 lanes = [Lane(lane_1[[0, 50, 209, 259, 309, 350, 409, 509, 639, 750, 848, 948, 1028, 1148, 1200, 1276], :]), Lane(lane_2[[0, 50, 100, 150, 209, 400, 600, 738, 800, 850, 900, 949, 1150, 1300, 1476], :])]
 
+def getaccLane(data):
+	accLane = data                                                                   # LIEST RICHTIGEN WERT EIN
+	rospy.loginfo("\nCurrent Lane ausgelesen:\n"+str(accLane)) 
+
 
 def on_localization(msg):
-		global lanes
+		global lanes, accLane, Konstant_speed ,Konstant_steering
 		odom = msg
+		accLane= accLane                                                            # NIMMT WERT NICHT AN, WARUM NICHT??
+                rospy.loginfo("\nCurrent Lane:\n"+str(accLane))  
 		car_pose = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y])
-		lookahead, param = lanes[0].lookahead_point(car_pose, 0.5)
+		lookahead, param = lanes[accLane].lookahead_point(car_pose, 0.5)
 		 
-		dy = lookahead[0][1]-car_pose[1]
-		dx = lookahead[0][0]-car_pose[0]
+		dy = lookahead[accLane][1]-car_pose[1]
+		dx = lookahead[accLane][0]-car_pose[0]
 		delta = math.atan2(dy,dx) #Auto zu Lookahead Point ist differenz vektor winkel 
 		theta = math.asin(odom.pose.pose.orientation.z)*2
  
 		diff = delta-theta 
-                rospy.loginfo("\nDelta -Theta:\n"+str(diff))
 		if((diff)<0):# => rechts lenken
 			steering_cmd = NormalizedSteeringCommand()
-	       		steering_cmd.value  = -Konstante
+	       		steering_cmd.value  = -Konstant_steering
 			norm_steering_pub.publish(steering_cmd)
-                        rospy.loginfo("\nIch bin kleiner Null\n")
-		#elif((diff>5.5) or (diff<-5.5)):
-		#	steering_cmd = NormalizedSteeringCommand()
-	      	#	steering_cmd.value  = 0
-		#	norm_steering_pub.publish(steering_cmd)
-		#        rospy.loginfo("\nDeckenkamerasprung\n")
+                        #rospy.loginfo("\nIch bin kleiner Null\n")
 	  	elif((diff)>0):  # => links lenken
 			steering_cmd = NormalizedSteeringCommand()
-	      		steering_cmd.value  = Konstante
+	      		steering_cmd.value  = Konstant_steering
 			norm_steering_pub.publish(steering_cmd)
-		        rospy.loginfo("\nIch bin groesser Null\n")
+		        #rospy.loginfo("\nIch bin groesser Null\n")
 			    #self.rate.sleep()
 	
 		
 		speed_cmd = SpeedCommand()
-		speed_cmd.value = 0.2
+		speed_cmd.value = Konstant_speed
 		speed_pub.publish(speed_cmd)
 		
 
 
   
+
+
 rospy.init_node("ass_11")
 
 #sub_Speed = rospy.Subscriber("/sensors/speed", SpeedCommand, speedCall, queue_size=10)
+
 localization_sub = rospy.Subscriber("/sensors/localization/filtered_map", Odometry, on_localization, queue_size=10)
 speed_pub = rospy.Publisher("/actuators/speed", SpeedCommand, queue_size=80)
-pub_Odom = rospy.Publisher("odomy", Odometry, queue_size = 10)
-#norm_steering_pub = rospy.Publisher("/actuators/steering_normalized", NormalizedSteeringCommand, queue_size=10)
 steering_pub = rospy.Publisher("/actuators/steering", SteeringCommand, queue_size=10)
-
+norm_steering_pub = rospy.Publisher("/actuators/steering_normalized", NormalizedSteeringCommand, queue_size=10)
+accLane_sub = rospy.Subscriber("/accLane", Int32, getaccLane, queue_size=10)
 
 
 rospy.spin()
