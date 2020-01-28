@@ -10,7 +10,7 @@ from steering_pid import SteeringPID
 from autominy_msgs.msg import SpeedCommand
 
 
-accLane = 0
+accLane = Int32()
 Konstant_steering = 50
 Konstant_speed = 0.2
 
@@ -19,14 +19,14 @@ lane_2 = np.load("lane2.npy")
 lanes = [Lane(lane_1[[0, 50, 209, 259, 309, 350, 409, 509, 639, 750, 848, 948, 1028, 1148, 1200, 1276], :]), Lane(lane_2[[0, 50, 100, 150, 209, 400, 600, 738, 800, 850, 900, 949, 1150, 1300, 1476], :])]
 
 def getaccLane(data):
-	accLane = data                                                                   # LIEST RICHTIGEN WERT EIN
+	accLane = data                                                                 
 	rospy.loginfo("\nCurrent Lane ausgelesen:\n"+str(accLane)) 
 
 
 def on_localization(msg):
 		global lanes, accLane, Konstant_speed ,Konstant_steering
 		odom = msg
-		accLane= accLane                                                            # NIMMT WERT NICHT AN, WARUM NICHT??
+		accLane= accLane                                                            # NIMMT WERT NICHT AN
                 rospy.loginfo("\nCurrent Lane:\n"+str(accLane))  
 		car_pose = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y])
 		lookahead, param = lanes[accLane].lookahead_point(car_pose, 0.5)
